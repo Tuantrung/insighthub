@@ -58,7 +58,7 @@ def _run_process_document(mock_conn):
 
 
 def test_process_document_is_idempotent():
-    """Chạy lại cùng document → xoá chunk cũ trước khi insert, trong cùng transaction."""
+    """Chạy lại cùng document → khoá row, xoá chunk cũ rồi mới insert (1 transaction)."""
     mock_conn = MagicMock()
     mock_conn.__enter__ = MagicMock(return_value=mock_conn)
     mock_conn.__exit__ = MagicMock(return_value=False)
@@ -68,8 +68,10 @@ def test_process_document_is_idempotent():
         assert _run_process_document(mock_conn) == 2
 
         sqls = [c.args[0].strip() for c in mock_conn.execute.call_args_list]
-        assert sqls[0].startswith("DELETE FROM chunks WHERE document_id")
+        assert sqls[0] == "SELECT id FROM documents WHERE id = %s FOR UPDATE"
+        assert sqls[1].startswith("DELETE FROM chunks WHERE document_id")
         assert mock_conn.execute.call_args_list[0].args[1] == (42,)
+        assert mock_conn.execute.call_args_list[1].args[1] == (42,)
         assert sum(s.startswith("INSERT INTO chunks") for s in sqls) == 2
         assert sqls[-1].startswith("UPDATE documents SET status = 'ready'")
         mock_conn.transaction.assert_called_once()

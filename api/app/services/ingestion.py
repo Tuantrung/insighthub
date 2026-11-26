@@ -61,6 +61,12 @@ def process_document(document_id: int, filename: str, content: bytes) -> int:
         with conn.transaction():
             # Idempotent: worker có thể chạy lại job (retry / cancel sau commit) →
             # xoá chunk cũ trong cùng transaction để không bị nhân đôi.
+            # Khoá row documents trước: 2 job cùng document chạy song song sẽ
+            # tuần tự hoá; DELETE của job sau (READ COMMITTED, snapshot mới)
+            # thấy và xoá chunk job trước vừa commit.
+            conn.execute(
+                "SELECT id FROM documents WHERE id = %s FOR UPDATE", (document_id,)
+            )
             conn.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
             for chunk, vector in zip(chunks, vectors):
                 conn.execute(
