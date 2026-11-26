@@ -14,7 +14,6 @@ import logging
 
 from arq import Retry
 
-from app.core.metrics import ingestion_queue_depth
 from app.services.ingestion import _update_status, process_document
 
 logger = logging.getLogger("insighthub.worker")
@@ -35,9 +34,6 @@ async def ingest_document(
     để tránh block event loop ARQ.
     """
     job_try: int = ctx.get("job_try", 1)
-    # Chỉ dec khi là lần thử đầu tiên — tránh drift gauge khi ARQ retry
-    if job_try == 1:
-        ingestion_queue_depth.dec()
     logger.info(
         "Worker nhận job document_id=%d filename=%s try=%d/%d",
         document_id,
